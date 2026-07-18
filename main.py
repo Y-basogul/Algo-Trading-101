@@ -11,6 +11,7 @@ from tabulate import tabulate
 
 from src.data_loader import download_market_data
 from src.indicators import prepare_indicator_data
+from src.strategies import prepare_strategy_data
 
 
 def load_config(
@@ -40,11 +41,12 @@ def load_config(
 
 
 def parse_arguments() -> argparse.Namespace:
-    """Read optional commands entered after 'python main.py'."""
+    """Read optional commands entered after python main.py."""
 
     parser = argparse.ArgumentParser(
         description=(
-            "Download market data and calculate indicators."
+            "Download data, calculate indicators and "
+            "generate strategy signals."
         )
     )
 
@@ -52,7 +54,8 @@ def parse_arguments() -> argparse.Namespace:
         "--refresh",
         action="store_true",
         help=(
-            "Download fresh data instead of using cached CSV files."
+            "Download fresh Yahoo data instead of "
+            "using cached CSV files."
         ),
     )
 
@@ -79,7 +82,7 @@ def print_table(
 
 
 def main() -> None:
-    """Run data downloading and indicator preparation."""
+    """Run the data, indicator and signal pipeline."""
 
     arguments = parse_arguments()
     config = load_config()
@@ -94,9 +97,11 @@ def main() -> None:
         table=download_summary,
     )
 
-    _, indicator_summary = prepare_indicator_data(
-        frames=market_frames,
-        config=config,
+    indicator_frames, indicator_summary = (
+        prepare_indicator_data(
+            frames=market_frames,
+            config=config,
+        )
     )
 
     print_table(
@@ -104,10 +109,20 @@ def main() -> None:
         table=indicator_summary,
     )
 
+    _, strategy_summary = prepare_strategy_data(
+        frames=indicator_frames,
+        config=config,
+    )
+
+    print_table(
+        title="Strategy-signal summary",
+        table=strategy_summary,
+    )
+
     print(
-        "\nData and indicators are ready."
-        "\nRaw files:       data/raw/"
-        "\nProcessed files: data/processed/"
+        "\nPipeline completed successfully."
+        "\nRaw data:              data/raw/"
+        "\nIndicators and signals: data/processed/"
     )
 
 
