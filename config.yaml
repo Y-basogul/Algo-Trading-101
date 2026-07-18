@@ -1,0 +1,65 @@
+data:
+  start_date: "2010-01-01"
+  end_date: null
+  interval: "1d"
+  auto_adjust: true
+
+  benchmark: "SPY"
+
+  tickers:
+    - "XLB"
+    - "XLE"
+    - "XLF"
+    - "XLI"
+    - "XLK"
+    - "XLP"
+    - "XLU"
+    - "XLV"
+    - "XLY"
+
+  raw_directory: "data/raw"
+  processed_directory: "data/processed"
+
+portfolio:
+  initial_capital: 100000
+  maximum_position_allocation: 0.25
+  risk_per_trade: 0.0075
+
+costs:
+  commission_per_share: 0.005
+  minimum_commission: 1.00
+  slippage_bps: 2
+
+risk:
+  atr_period: 14
+  atr_stop_multiple: 2.5
+
+  trailing_stop:
+    enabled: false
+    atr_multiple: 3.0
+
+  circuit_breaker:
+    enabled: true
+    maximum_drawdown: 0.15
+    cooldown_days: 20
+
+momentum:
+  fast_moving_average: 50
+  slow_moving_average: 200
+
+mean_reversion:
+  trend_moving_average: 200
+
+  rsi_period: 14
+  rsi_entry: 35
+  rsi_exit: 55
+
+  zscore_period: 20
+  zscore_entry: -1.5
+  zscore_exit: 0.0
+
+  maximum_holding_days: 15
+
+combination:
+  momentum_weight: 0.50
+  mean_reversion_weight: 0.50
