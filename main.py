@@ -14,13 +14,14 @@ from src.data_loader import download_market_data
 from src.indicators import prepare_indicator_data
 from src.metrics import build_performance_report
 from src.plots import create_all_plots
+from src.risk_free import prepare_risk_free_data
 from src.strategies import prepare_strategy_data
 
 
 def load_config(
     config_path: str = "config.yaml",
 ) -> dict[str, Any]:
-    """Read and validate the YAML configuration file."""
+    """Read and validate the YAML configuration."""
 
     path = Path(config_path)
 
@@ -44,7 +45,7 @@ def load_config(
 
 
 def parse_arguments() -> argparse.Namespace:
-    """Read optional commands entered after python main.py."""
+    """Read optional terminal arguments."""
 
     parser = argparse.ArgumentParser(
         description=(
@@ -56,8 +57,8 @@ def parse_arguments() -> argparse.Namespace:
         "--refresh",
         action="store_true",
         help=(
-            "Download fresh Yahoo data instead of "
-            "using cached CSV files."
+            "Download fresh Yahoo and FRED data "
+            "instead of using cached CSV files."
         ),
     )
 
@@ -68,7 +69,7 @@ def print_table(
     title: str,
     table: Any,
 ) -> None:
-    """Print a DataFrame as a readable terminal table."""
+    """Print a readable terminal table."""
 
     print(f"\n{title}")
     print("-" * len(title))
@@ -86,7 +87,7 @@ def print_table(
 def format_basic_backtest_table(
     table,
 ):
-    """Format the simple backtest summary for terminal display."""
+    """Format the simple backtest results."""
 
     display = table.copy()
 
@@ -100,15 +101,15 @@ def format_basic_backtest_table(
         .map(lambda value: f"{value:.2%}")
     )
 
-    display["Initial capital"] = (
-        display["Initial capital"]
-        .map(lambda value: f"${value:,.2f}")
-    )
-
-    display["Final value"] = (
-        display["Final value"]
-        .map(lambda value: f"${value:,.2f}")
-    )
+    for column in [
+        "Initial capital",
+        "Final value",
+        "Cash interest earned",
+    ]:
+        display[column] = (
+            display[column]
+            .map(lambda value: f"${value:,.2f}")
+        )
 
     return display
 
@@ -116,7 +117,7 @@ def format_basic_backtest_table(
 def format_metrics_table(
     table,
 ):
-    """Format percentages and currency for the terminal."""
+    """Format percentages, ratios and currency."""
 
     display = table.copy()
 
@@ -173,6 +174,21 @@ def format_metrics_table(
     return display
 
 
+def format_risk_free_table(
+    table,
+):
+    """Format the risk-free-data summary."""
+
+    display = table.copy()
+
+    display["Average annual yield"] = (
+        display["Average annual yield"]
+        .map(lambda value: f"{value:.2%}")
+    )
+
+    return display
+
+
 def main() -> None:
     """Run the complete project pipeline."""
 
@@ -213,9 +229,25 @@ def main() -> None:
         table=strategy_summary,
     )
 
+    risk_free_returns, risk_free_summary = (
+        prepare_risk_free_data(
+            config=config,
+            frames=strategy_frames,
+            force_refresh=arguments.refresh,
+        )
+    )
+
+    print_table(
+        title="Risk-free-rate summary",
+        table=format_risk_free_table(
+            risk_free_summary
+        ),
+    )
+
     backtest_summary = run_all_backtests(
         frames=strategy_frames,
         config=config,
+        risk_free_returns=risk_free_returns,
     )
 
     print_table(
@@ -229,6 +261,7 @@ def main() -> None:
         build_performance_report(
             frames=strategy_frames,
             config=config,
+            risk_free_returns=risk_free_returns,
         )
     )
 
@@ -245,8 +278,8 @@ def main() -> None:
 
     print(
         "\nPipeline completed successfully."
-        "\nRaw data:         data/raw/"
-        "\nProcessed data:   data/processed/"
+        "\nRaw data:          data/raw/"
+        "\nProcessed data:    data/processed/"
         "\nResults and plots: outputs/"
     )
 

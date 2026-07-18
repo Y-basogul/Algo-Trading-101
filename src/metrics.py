@@ -12,8 +12,10 @@ import pandas as pd
 TRADING_DAYS_PER_YEAR = 252
 
 
-def load_portfolio_history(file_path: str | Path) -> pd.DataFrame:
-    """Load one portfolio-history CSV created by the backtester."""
+def load_portfolio_history(
+    file_path: str | Path,
+) -> pd.DataFrame:
+    """Load one portfolio-history CSV."""
 
     path = Path(file_path)
 
@@ -30,12 +32,11 @@ def load_portfolio_history(file_path: str | Path) -> pd.DataFrame:
 
     if "Portfolio value" not in history.columns:
         raise ValueError(
-            f"{path} does not contain a 'Portfolio value' column."
+            f"{path} does not contain a "
+            "'Portfolio value' column."
         )
 
-    history = history.sort_index()
-
-    return history
+    return history.sort_index()
 
 
 def calculate_order_commission(
@@ -65,15 +66,13 @@ def create_spy_benchmark(
     spy_data: pd.DataFrame,
     comparison_dates: pd.DatetimeIndex,
     config: dict[str, Any],
+    risk_free_returns: pd.Series,
 ) -> pd.Series:
     """
-    Simulate buying SPY at the first available open and holding it.
+    Simulate buying SPY and holding it.
 
-    The benchmark uses:
-    - the same initial capital,
-    - whole shares,
-    - opening slippage,
-    - one opening commission.
+    Any cash remaining after purchasing whole shares earns the
+    same risk-free return used by the strategies.
     """
 
     initial_capital = float(
@@ -93,7 +92,8 @@ def create_spy_benchmark(
 
     if aligned_spy.empty:
         raise ValueError(
-            "SPY data could not be aligned with the backtest dates."
+            "SPY data could not be aligned "
+            "with the backtest dates."
         )
 
     first_date = aligned_spy.index[0]
@@ -140,8 +140,19 @@ def create_spy_benchmark(
         - total_cost
     )
 
-    benchmark = (
+    aligned_risk_free = (
+        risk_free_returns
+        .reindex(aligned_spy.index)
+        .fillna(0.0)
+    )
+
+    cash_path = (
         remaining_cash
+        * (1 + aligned_risk_free).cumprod()
+    )
+
+    benchmark = (
+        cash_path
         + shares * aligned_spy["Close"]
     )
 
@@ -155,20 +166,16 @@ def create_combined_portfolio(
     mean_reversion: pd.Series,
     config: dict[str, Any],
 ) -> pd.Series:
-    """
-    Combine the two strategy sleeves using configured starting weights.
-
-    A 50/50 combination means:
-    - 50% of starting capital follows momentum.
-    - 50% follows mean reversion.
-    """
+    """Combine both strategies using the configured weights."""
 
     momentum_weight = float(
         config["combination"]["momentum_weight"]
     )
 
     mean_reversion_weight = float(
-        config["combination"]["mean_reversion_weight"]
+        config["combination"][
+            "mean_reversion_weight"
+        ]
     )
 
     total_weight = (
@@ -178,7 +185,7 @@ def create_combined_portfolio(
 
     if not np.isclose(total_weight, 1.0):
         raise ValueError(
-            "Momentum and mean-reversion weights must add to 1."
+            "The strategy weights must add to 1."
         )
 
     initial_capital = float(
@@ -196,8 +203,7 @@ def create_combined_portfolio(
     )
 
     combined = initial_capital * (
-        momentum_weight
-        * momentum_normalised
+        momentum_weight * momentum_normalised
         + mean_reversion_weight
         * mean_reversion_normalised
     )
@@ -210,23 +216,22 @@ def create_combined_portfolio(
 def calculate_drawdown(
     portfolio_values: pd.Series,
 ) -> pd.Series:
-    """Calculate the portfolio's percentage decline from previous peaks."""
+    """Calculate percentage declines from previous peaks."""
 
     running_peak = portfolio_values.cummax()
 
-    drawdown = (
+    return (
         portfolio_values
         / running_peak
         - 1
     )
 
-    return drawdown
-
 
 def calculate_performance_metrics(
     portfolio_values: pd.Series,
+    risk_free_returns: pd.Series,
 ) -> dict[str, float]:
-    """Calculate standard return and risk metrics."""
+    """Calculate return and risk metrics."""
 
     values = portfolio_values.dropna()
 
@@ -235,10 +240,30 @@ def calculate_performance_metrics(
             "At least two portfolio observations are required."
         )
 
-    daily_returns = values.pct_change().dropna()
+    daily_returns = (
+        values
+        .pct_change()
+        .dropna()
+    )
 
-    initial_value = float(values.iloc[0])
-    final_value = float(values.iloc[-1])
+    aligned_risk_free = (
+        risk_free_returns
+        .reindex(daily_returns.index)
+        .fillna(0.0)
+    )
+
+    excess_returns = (
+        daily_returns
+        - aligned_risk_free
+    )
+
+    initial_value = float(
+        values.iloc[0]
+    )
+
+    final_value = float(
+        values.iloc[-1]
+    )
 
     total_return = (
         final_value
@@ -264,15 +289,23 @@ def calculate_performance_metrics(
     else:
         annualised_return = np.nan
 
-    annualised_volatility = (
+    daily_volatility = (
         daily_returns.std(ddof=1)
+    )
+
+    annualised_volatility = (
+        daily_volatility
         * np.sqrt(TRADING_DAYS_PER_YEAR)
     )
 
-    if daily_returns.std(ddof=1) > 0:
+    excess_volatility = (
+        excess_returns.std(ddof=1)
+    )
+
+    if excess_volatility > 0:
         sharpe_ratio = (
-            daily_returns.mean()
-            / daily_returns.std(ddof=1)
+            excess_returns.mean()
+            / excess_volatility
             * np.sqrt(TRADING_DAYS_PER_YEAR)
         )
     else:
@@ -311,7 +344,8 @@ def calculate_performance_metrics(
         "Final value": final_value,
         "Total return": total_return,
         "Annualised return": annualised_return,
-        "Annualised volatility": annualised_volatility,
+        "Annualised volatility":
+            annualised_volatility,
         "Sharpe ratio": sharpe_ratio,
         "Sortino ratio": sortino_ratio,
         "Maximum drawdown": maximum_drawdown,
@@ -322,7 +356,7 @@ def calculate_performance_metrics(
 def load_trade_win_rate(
     trade_file: str | Path,
 ) -> tuple[int, float]:
-    """Read the number of trades and profitable-trade percentage."""
+    """Return trade count and profitable-trade percentage."""
 
     path = Path(trade_file)
 
@@ -346,17 +380,9 @@ def load_trade_win_rate(
 def build_performance_report(
     frames: dict[str, pd.DataFrame],
     config: dict[str, Any],
+    risk_free_returns: pd.Series,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    Build the comparison portfolio and complete metrics table.
-
-    Returns:
-        comparison:
-            Daily portfolio values for all four alternatives.
-
-        metrics:
-            Performance measurements for each alternative.
-    """
+    """Build the portfolio comparison and metrics table."""
 
     momentum_history = load_portfolio_history(
         "outputs/momentum_portfolio.csv"
@@ -372,12 +398,10 @@ def build_performance_report(
         )
     )
 
-    momentum_values = (
-        momentum_history.loc[
-            comparison_dates,
-            "Portfolio value",
-        ]
-    )
+    momentum_values = momentum_history.loc[
+        comparison_dates,
+        "Portfolio value",
+    ]
 
     mean_reversion_values = (
         mean_reversion_history.loc[
@@ -398,6 +422,7 @@ def build_performance_report(
         ],
         comparison_dates=comparison_dates,
         config=config,
+        risk_free_returns=risk_free_returns,
     )
 
     comparison = pd.concat(
@@ -454,7 +479,8 @@ def build_performance_report(
         row = {
             "Portfolio": name,
             **calculate_performance_metrics(
-                comparison[name]
+                portfolio_values=comparison[name],
+                risk_free_returns=risk_free_returns,
             ),
         }
 
@@ -465,7 +491,9 @@ def build_performance_report(
 
         metric_rows.append(row)
 
-    metrics = pd.DataFrame(metric_rows)
+    metrics = pd.DataFrame(
+        metric_rows
+    )
 
     metrics.to_csv(
         "outputs/performance_metrics.csv",

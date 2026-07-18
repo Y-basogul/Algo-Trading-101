@@ -117,6 +117,7 @@ def backtest_strategy(
     frames,
     config,
     strategy,
+    risk_free_returns,
 ):
     """
     Run one strategy.
@@ -214,6 +215,8 @@ def backtest_strategy(
 
     cash = initial_capital
 
+    total_cash_interest = 0.0
+
     positions = {}
 
     pending_entries = []
@@ -302,6 +305,25 @@ def backtest_strategy(
     for day_number, date in enumerate(
         dates
     ):
+        # Cash held from the previous trading date earns the
+        # risk-free return before today's opening transactions.
+
+        daily_risk_free_return = float(
+            risk_free_returns.get(
+                date,
+                0.0,
+            )
+        )
+
+        cash_interest = (
+            cash
+            * daily_risk_free_return
+        )
+
+        cash += cash_interest
+        total_cash_interest += cash_interest
+
+        
         # ----------------------------------------
         # 1. Yesterday's exit signals execute at
         # today's open.
@@ -674,6 +696,9 @@ def backtest_strategy(
                 "Date": date,
                 "Strategy": strategy,
                 "Cash": cash,
+                "Cash interest earned": (
+                    total_cash_interest
+                ),
                 "Positions value": (
                     closing_value
                     - cash
@@ -764,6 +789,9 @@ def backtest_strategy(
             initial_capital
         ),
         "Final value": cash,
+        "Cash interest earned": (
+            total_cash_interest
+        ),
         "Total return": (
             cash
             / initial_capital
@@ -785,6 +813,7 @@ def backtest_strategy(
 def run_all_backtests(
     frames,
     config,
+    risk_free_returns,
 ):
     """Run both strategies and save their result files."""
 
@@ -811,6 +840,7 @@ def run_all_backtests(
             frames=frames,
             config=config,
             strategy=strategy,
+            risk_free_returns=risk_free_returns,
         )
 
         history.to_csv(

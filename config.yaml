@@ -63,3 +63,9 @@ mean_reversion:
 combination:
   momentum_weight: 0.50
   mean_reversion_weight: 0.50
+
+risk_free:
+  fred_series: "DGS3MO"
+  cache_file: "data/raw/DGS3MO.csv"
+  processed_file: "data/processed/risk_free_daily.csv"
+  day_count_basis: 365.0
