@@ -1,0 +1,25 @@
+# Python-generated files
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+
+# Environment variables and secrets
+.env
+
+# Operating-system files
+.DS_Store
+
+# Downloaded market data
+data/raw/*.csv
+data/processed/*.csv
+
+# Generated reports and graphs
+outputs/*
+
+# Keep empty folder placeholders
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!outputs/.gitkeep
