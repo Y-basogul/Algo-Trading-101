@@ -12,6 +12,7 @@ from tabulate import tabulate
 from src.data_loader import download_market_data
 from src.indicators import prepare_indicator_data
 from src.strategies import prepare_strategy_data
+from src.backtester import run_all_backtests
 
 
 def load_config(
@@ -109,7 +110,7 @@ def main() -> None:
         table=indicator_summary,
     )
 
-    _, strategy_summary = prepare_strategy_data(
+    strategy_frames, strategy_summary = prepare_strategy_data(
         frames=indicator_frames,
         config=config,
     )
@@ -117,6 +118,38 @@ def main() -> None:
     print_table(
         title="Strategy-signal summary",
         table=strategy_summary,
+    )
+
+    backtest_summary = run_all_backtests(
+        frames=strategy_frames,
+        config=config,
+    )
+
+    backtest_display = backtest_summary.copy()
+
+    backtest_display["Total return"] = (
+        backtest_display["Total return"]
+        .map(lambda value: f"{value:.2%}")
+    )
+
+    backtest_display["Win rate"] = (
+        backtest_display["Win rate"]
+        .map(lambda value: f"{value:.2%}")
+    )
+
+    backtest_display["Initial capital"] = (
+        backtest_display["Initial capital"]
+        .map(lambda value: f"${value:,.2f}")
+    )
+
+    backtest_display["Final value"] = (
+        backtest_display["Final value"]
+        .map(lambda value: f"${value:,.2f}")
+    )
+
+    print_table(
+        title="Basic backtest summary",
+        table=backtest_display,
     )
 
     print(
