@@ -9,10 +9,12 @@ from typing import Any
 import yaml
 from tabulate import tabulate
 
+from src.backtester import run_all_backtests
 from src.data_loader import download_market_data
 from src.indicators import prepare_indicator_data
+from src.metrics import build_performance_report
+from src.plots import create_all_plots
 from src.strategies import prepare_strategy_data
-from src.backtester import run_all_backtests
 
 
 def load_config(
@@ -46,8 +48,7 @@ def parse_arguments() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(
         description=(
-            "Download data, calculate indicators and "
-            "generate strategy signals."
+            "Run the complete ETF trading backtest."
         )
     )
 
@@ -65,7 +66,7 @@ def parse_arguments() -> argparse.Namespace:
 
 def print_table(
     title: str,
-    table,
+    table: Any,
 ) -> None:
     """Print a DataFrame as a readable terminal table."""
 
@@ -82,8 +83,98 @@ def print_table(
     )
 
 
+def format_basic_backtest_table(
+    table,
+):
+    """Format the simple backtest summary for terminal display."""
+
+    display = table.copy()
+
+    display["Total return"] = (
+        display["Total return"]
+        .map(lambda value: f"{value:.2%}")
+    )
+
+    display["Win rate"] = (
+        display["Win rate"]
+        .map(lambda value: f"{value:.2%}")
+    )
+
+    display["Initial capital"] = (
+        display["Initial capital"]
+        .map(lambda value: f"${value:,.2f}")
+    )
+
+    display["Final value"] = (
+        display["Final value"]
+        .map(lambda value: f"${value:,.2f}")
+    )
+
+    return display
+
+
+def format_metrics_table(
+    table,
+):
+    """Format percentages and currency for the terminal."""
+
+    display = table.copy()
+
+    currency_columns = [
+        "Initial value",
+        "Final value",
+    ]
+
+    percentage_columns = [
+        "Total return",
+        "Annualised return",
+        "Annualised volatility",
+        "Maximum drawdown",
+        "Positive day rate",
+        "Trade win rate",
+    ]
+
+    ratio_columns = [
+        "Sharpe ratio",
+        "Sortino ratio",
+    ]
+
+    for column in currency_columns:
+        display[column] = display[column].map(
+            lambda value: f"${value:,.2f}"
+        )
+
+    for column in percentage_columns:
+        display[column] = display[column].map(
+            lambda value: (
+                "N/A"
+                if value != value
+                else f"{value:.2%}"
+            )
+        )
+
+    for column in ratio_columns:
+        display[column] = display[column].map(
+            lambda value: (
+                "N/A"
+                if value != value
+                else f"{value:.2f}"
+            )
+        )
+
+    display["Trades"] = display["Trades"].map(
+        lambda value: (
+            "N/A"
+            if value != value
+            else str(int(value))
+        )
+    )
+
+    return display
+
+
 def main() -> None:
-    """Run the data, indicator and signal pipeline."""
+    """Run the complete project pipeline."""
 
     arguments = parse_arguments()
     config = load_config()
@@ -110,9 +201,11 @@ def main() -> None:
         table=indicator_summary,
     )
 
-    strategy_frames, strategy_summary = prepare_strategy_data(
-        frames=indicator_frames,
-        config=config,
+    strategy_frames, strategy_summary = (
+        prepare_strategy_data(
+            frames=indicator_frames,
+            config=config,
+        )
     )
 
     print_table(
@@ -125,37 +218,36 @@ def main() -> None:
         config=config,
     )
 
-    backtest_display = backtest_summary.copy()
-
-    backtest_display["Total return"] = (
-        backtest_display["Total return"]
-        .map(lambda value: f"{value:.2%}")
+    print_table(
+        title="Basic backtest summary",
+        table=format_basic_backtest_table(
+            backtest_summary
+        ),
     )
 
-    backtest_display["Win rate"] = (
-        backtest_display["Win rate"]
-        .map(lambda value: f"{value:.2%}")
-    )
-
-    backtest_display["Initial capital"] = (
-        backtest_display["Initial capital"]
-        .map(lambda value: f"${value:,.2f}")
-    )
-
-    backtest_display["Final value"] = (
-        backtest_display["Final value"]
-        .map(lambda value: f"${value:,.2f}")
+    comparison, performance_metrics = (
+        build_performance_report(
+            frames=strategy_frames,
+            config=config,
+        )
     )
 
     print_table(
-        title="Basic backtest summary",
-        table=backtest_display,
+        title="Complete performance comparison",
+        table=format_metrics_table(
+            performance_metrics
+        ),
+    )
+
+    create_all_plots(
+        comparison=comparison,
     )
 
     print(
         "\nPipeline completed successfully."
-        "\nRaw data:              data/raw/"
-        "\nIndicators and signals: data/processed/"
+        "\nRaw data:         data/raw/"
+        "\nProcessed data:   data/processed/"
+        "\nResults and plots: outputs/"
     )
 
 
