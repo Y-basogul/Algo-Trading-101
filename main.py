@@ -10,9 +10,12 @@ import yaml
 from tabulate import tabulate
 
 from src.data_loader import download_market_data
+from src.indicators import prepare_indicator_data
 
 
-def load_config(config_path: str = "config.yaml") -> dict[str, Any]:
+def load_config(
+    config_path: str = "config.yaml",
+) -> dict[str, Any]:
     """Read and validate the YAML configuration file."""
 
     path = Path(config_path)
@@ -22,7 +25,10 @@ def load_config(config_path: str = "config.yaml") -> dict[str, Any]:
             f"Configuration file was not found: {path}"
         )
 
-    with path.open("r", encoding="utf-8") as config_file:
+    with path.open(
+        "r",
+        encoding="utf-8",
+    ) as config_file:
         config = yaml.safe_load(config_file)
 
     if not isinstance(config, dict):
@@ -37,42 +43,72 @@ def parse_arguments() -> argparse.Namespace:
     """Read optional commands entered after 'python main.py'."""
 
     parser = argparse.ArgumentParser(
-        description="Download and prepare ETF market data."
+        description=(
+            "Download market data and calculate indicators."
+        )
     )
 
     parser.add_argument(
         "--refresh",
         action="store_true",
-        help="Download fresh files instead of using cached CSV files.",
+        help=(
+            "Download fresh data instead of using cached CSV files."
+        ),
     )
 
     return parser.parse_args()
 
 
-def main() -> None:
-    """Run the market-data preparation stage."""
+def print_table(
+    title: str,
+    table,
+) -> None:
+    """Print a DataFrame as a readable terminal table."""
 
-    arguments = parse_arguments()
-    config = load_config()
-
-    _, summary = download_market_data(
-        config=config,
-        force_refresh=arguments.refresh,
-    )
-
-    print("\nDownload summary")
-    print("----------------")
+    print(f"\n{title}")
+    print("-" * len(title))
 
     print(
         tabulate(
-            summary,
+            table,
             headers="keys",
             tablefmt="github",
             showindex=False,
         )
     )
 
-    print("\nMarket data is ready inside data/raw/.")
+
+def main() -> None:
+    """Run data downloading and indicator preparation."""
+
+    arguments = parse_arguments()
+    config = load_config()
+
+    market_frames, download_summary = download_market_data(
+        config=config,
+        force_refresh=arguments.refresh,
+    )
+
+    print_table(
+        title="Market-data summary",
+        table=download_summary,
+    )
+
+    _, indicator_summary = prepare_indicator_data(
+        frames=market_frames,
+        config=config,
+    )
+
+    print_table(
+        title="Indicator summary",
+        table=indicator_summary,
+    )
+
+    print(
+        "\nData and indicators are ready."
+        "\nRaw files:       data/raw/"
+        "\nProcessed files: data/processed/"
+    )
 
 
 if __name__ == "__main__":
